@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高配当株ダッシュボード</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; font-size: 14px; }
+  header { background: #1a1a1a; color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 18px; font-weight: 500; }
+  header span { font-size: 12px; color: #aaa; }
+  .token-bar { background: #fff; border-bottom: 1px solid #e5e5e0; padding: 12px 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .token-bar input { flex: 1; min-width: 260px; padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: monospace; }
+  .token-bar button { padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .btn-primary { background: #1d9e75; color: #fff; }
+  .btn-primary:hover { background: #0f6e56; }
+  .btn-secondary { background: #f0f0ec; color: #333; border: 1px solid #ddd; }
+  .btn-danger { background: #e24b4a; color: #fff; }
+  .status { font-size: 12px; padding: 4px 10px; border-radius: 12px; }
+  .status.ok { background: #e1f5ee; color: #0f6e56; }
+  .status.err { background: #fcebeb; color: #a32d2d; }
+  .status.loading { background: #faeeda; color: #854f0b; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .summary-card { background: #fff; border-radius: 10px; padding: 14px 16px; border: 0.5px solid #e5e5e0; }
+  .summary-card p:first-child { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .summary-card p:last-child { font-size: 22px; font-weight: 500; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+  .controls select { padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 13px; }
+  .controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; cursor: pointer; }
+  .refresh-btn { margin-left: auto; padding: 6px 14px; border-radius: 6px; border: 1px solid #ddd; background: #fff; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .refresh-btn:hover { background: #f0f0ec; }
+  .tbl-wrap { overflow-x: auto; border-radius: 10px; border: 0.5px solid #e5e5e0; }
+  table { width: 100%; border-collapse: collapse; background: #fff; min-width: 820px; }
+  th { background: #f8f8f5; padding: 10px 12px; text-align: right; color: #666; font-weight: 500; border-bottom: 1px solid #e5e5e0; white-space: nowrap; font-size: 12px; }
+  th:first-child, th:nth-child(2), th:nth-child(3) { text-align: left; }
+  td { padding: 10px 12px; border-bottom: 0.5px solid #f0f0ec; text-align: right; white-space: nowrap; font-size: 13px; }
+  td:first-child { text-align: left; font-weight: 500; }
+  td:nth-child(2) { text-align: left; color: #888; font-size: 11px; }
+  td:nth-child(3) { text-align: left; }
+  tr:last-child td { border-bottom: none; }
+  tr.buy td { background: rgba(29,158,117,0.05); }
+  tr.watch td { background: rgba(186,117,23,0.05); }
+  tr:hover td { background: rgba(0,0,0,0.02); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; display: inline-block; white-space: nowrap; font-weight: 500; }
+  .badge-buy { background: #e1f5ee; color: #0f6e56; }
+  .badge-watch { background: #faeeda; color: #854f0b; }
+  .badge-hold { background: #f0f0ec; color: #666; }
+  .badge-month { background: #e6f1fb; color: #185fa5; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .badge-inc { background: #e1f5ee; color: #0f6e56; font-size: 10px; padding: 2px 6px; border-radius: 8px; }
+  .prog-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+  .prog-bar { width: 48px; height: 5px; border-radius: 3px; background: #f0f0ec; overflow: hidden; }
+  .prog-fill { height: 100%; border-radius: 3px; }
+  .green { color: #1d9e75; }
+  .amber { color: #ba7517; }
+  .red { color: #e24b4a; }
+  .gray { color: #888; }
+  .updated { font-size: 11px; color: #aaa; margin-left: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 12px; color: #666; }
+  .leg { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .empty { text-align: center; padding: 40px; color: #aaa; }
+  .note { font-size: 11px; color: #aaa; margin-top: 12px; line-height: 1.8; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ddd; border-top-color: #1d9e75; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 高配当株ダッシュボード</h1>
+  <span id="lastUpdated">未取得</span>
+</header>
+
+<div class="token-bar">
+  <input type="password" id="tokenInput" placeholder="J-Quants IDトークンを入力..." />
+  <button class="btn-primary" onclick="saveToken()">保存して取得</button>
+  <button class="btn-secondary" onclick="clearToken()">クリア</button>
+  <span id="tokenStatus" class="status">未設定</span>
+</div>
+
+<div class="container">
+  <div class="summary" id="summary">
+    <div class="summary-card"><p>監視銘柄数</p><p id="s-total">—</p></div>
+    <div class="summary-card"><p>買い候補</p><p id="s-buy" class="green">—</p></div>
+    <div class="summary-card"><p>平均利回り</p><p id="s-yield">—</p></div>
+    <div class="summary-card"><p>平均PER</p><p id="s-per">—</p></div>
+    <div class="summary-card"><p>最終更新</p><p id="s-updated" style="font-size:14px;">—</p></div>
+  </div>
+
+  <div class="controls">
+    <select id="monthFilter" onchange="render()">
+      <option value="all">全配当月</option>
+      <option value="3,9">3・9月</option>
+      <option value="6,12">6・12月</option>
+      <option value="3">3月のみ</option>
+      <option value="6">6月のみ</option>
+      <option value="9">9月のみ</option>
+      <option value="12">12月のみ</option>
+    </select>
+    <select id="sortBy" onchange="render()">
+      <option value="yield">利回り高い順</option>
+      <option value="per">PER低い順</option>
+      <option value="pbr">PBR低い順</option>
+      <option value="roe">ROE高い順</option>
+      <option value="w52">52週水準低い順</option>
+    </select>
+    <label><input type="checkbox" id="buyOnly" onchange="render()"> 買い候補のみ</label>
+    <button class="refresh-btn" onclick="fetchAll()">
+      <span id="refreshIcon">↻</span> データ更新
+    </button>
+  </div>
+
+  <div class="legend">
+    <span class="leg"><span class="dot" style="background:#1d9e75"></span>買い候補（4指標すべて良好）</span>
+    <span class="leg"><span class="dot" style="background:#ba7517"></span>要観察（3指標良好）</span>
+    <span class="leg"><span class="dot" style="background:#ccc"></span>保留</span>
+    <span style="margin-left:auto;font-size:11px;color:#aaa;">52週水準: 低いほど安値圏</span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left;">銘柄</th>
+          <th style="text-align:left;">コード</th>
+          <th style="text-align:left;">配当月</th>
+          <th>株価</th>
+          <th>利回り</th>
+          <th>PER</th>
+          <th>PBR</th>
+          <th>ROE</th>
+          <th>EPS</th>
+          <th>52週高値</th>
+          <th>52週安値</th>
+          <th>52週水準</th>
+          <th>増配</th>
+          <th>判定</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="14" class="empty">上部にJ-Quantsトークンを入力してデータを取得してください</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">
+    ※ データはJ-Quants API（前営業日終値）を使用。52週水準＝（現在株価－52週安値）÷（52週高値－52週安値）×100。<br>
+    判定基準: 買い候補＝PER20倍以下 かつ PBR2.5倍以下 かつ ROE10%以上 かつ 52週水準60%以下。<br>
+    本情報は投資勧誘ではありません。投資判断はご自身でご確認ください。
+  </p>
+</div>
+
+<script>
+const WATCHLIST = [
+  { code:"8031", name:"三井物産",          months:[3,9],  div:"連続増配8期",  sector:"商社" },
+  { code:"8058", name:"三菱商事",          months:[3,9],  div:"連続増配6期",  sector:"商社" },
+  { code:"8001", name:"伊藤忠商事",        months:[3,9],  div:"連続増配10期", sector:"商社" },
+  { code:"8053", name:"住友商事",          months:[3,9],  div:"連続増配5期",  sector:"商社" },
+  { code:"8766", name:"東京海上HD",        months:[3,9],  div:"連続増配10期", sector:"保険" },
+  { code:"8630", name:"SOMPOホールディングス", months:[3,9], div:"連続増配8期", sector:"保険" },
+  { code:"8725", name:"MS&ADインシュアランス", months:[3,9], div:"連続増配6期", sector:"保険" },
+  { code:"9433", name:"KDDI",             months:[3,9],  div:"連続増配22期", sector:"通信" },
+  { code:"9432", name:"NTT",              months:[3,9],  div:"連続増配10期", sector:"通信" },
+  { code:"9434", name:"ソフトバンク",      months:[3,9],  div:"非減配5期",    sector:"通信" },
+  { code:"2914", name:"JT",              months:[6,12], div:"非減配8期",    sector:"食品" },
+  { code:"8316", name:"三井住友FG",        months:[3,9],  div:"連続増配10期", sector:"銀行" },
+  { code:"8411", name:"みずほFG",          months:[3,9],  div:"連続増配4期",  sector:"銀行" },
+  { code:"8306", name:"三菱UFJ FG",        months:[3,9],  div:"連続増配6期",  sector:"銀行" },
+  { code:"8591", name:"オリックス",        months:[3,9],  div:"非減配8期",    sector:"金融" },
+  { code:"8425", name:"三菱HCキャピタル",  months:[3,9],  div:"連続増配28期", sector:"金融" },
+  { code:"5020", name:"ENEOSホールディングス", months:[3,9], div:"連続増配4期", sector:"エネルギー" },
+  { code:"5019", name:"出光興産",          months:[3,9],  div:"連続増配5期",  sector:"エネルギー" },
+  { code:"9101", name:"日本郵船",          months:[3,9],  div:"連続増配3期",  sector:"海運" },
+  { code:"9104", name:"商船三井",          months:[3,9],  div:"連続増配4期",  sector:"海運" },
+  { code:"9107", name:"川崎汽船",          months:[3,9],  div:"連続増配3期",  sector:"海運" },
+  { code:"6981", name:"村田製作所",        months:[3,9],  div:"連続増配24期", sector:"電子" },
+  { code:"4063", name:"信越化学工業",      months:[3,9],  div:"連続増配10期", sector:"化学" },
+];
+
+let stockData = {};
+let idToken = localStorage.getItem("jquants_token") || "";
+
+function saveToken() {
+  const t = document.getElementById("tokenInput").value.trim();
+  if (!t) return alert("トークンを入力してください");
+  idToken = t;
+  localStorage.setItem("jquants_token", t);
+  document.getElementById("tokenInput").value = "";
+  setStatus("保存済み ✓", "ok");
+  fetchAll();
+}
+
+function clearToken() {
+  localStorage.removeItem("jquants_token");
+  idToken = "";
+  setStatus("未設定", "");
+  document.getElementById("tbody").innerHTML = '<tr><td colspan="14" class="empty">トークンをクリアしました</td></tr>';
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById("tokenStatus");
+  el.textContent = msg;
+  el.className = "status " + type;
+}
+
+async function fetchQuote(code) {
+  const today = new Date();
+  const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, "");
+  const to = fmt(today);
+  const from = fmt(new Date(today - 365 * 24 * 60 * 60 * 1000));
+
+  const url = `https://api.jquants.com/v1/prices/daily_quotes?code=${code}&from=${from}&to=${to}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${idToken}` }
+  });
+  if (!res.ok) throw new Error(`${code}: ${res.status}`);
+  const data = await res.json();
+  return data.daily_quotes || [];
+}
+
+async function fetchFin(code) {
+  const url = `https://api.jquants.com/v1/fins/statements?code=${code}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${idToken}` }
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return (data.statements || [])[0] || null;
+}
+
+async function fetchAll() {
+  if (!idToken) { alert("トークンを入力してください"); return; }
+  setStatus("取得中...", "loading");
+  document.getElementById("refreshIcon").innerHTML = '<span class="spinner"></span>';
+
+  let ok = 0, err = 0;
+  for (const s of WATCHLIST) {
+    try {
+      const quotes = await fetchQuote(s.code);
+      if (!quotes.length) continue;
+
+      const latest = quotes[quotes.length - 1];
+      const prices = quotes.map(q => q.Close).filter(Boolean);
+      const high52 = Math.max(...prices);
+      const low52 = Math.min(...prices);
+      const price = latest.Close;
+      const w52 = high52 === low52 ? 50 : Math.round((price - low52) / (high52 - low52) * 100);
+
+      const fin = await fetchFin(s.code);
+      const eps = fin ? Math.round(fin.EarningsPerShare || 0) : null;
+      const bps = fin ? Math.round(fin.BookValuePerShare || 0) : null;
+      const divPerShare = fin ? (fin.DividendPerShare || 0) : null;
+      const yield_ = divPerShare && price ? Math.round(divPerShare / price * 10000) / 100 : null;
+      const per = eps && eps > 0 ? Math.round(price / eps * 10) / 10 : null;
+      const pbr = bps && bps > 0 ? Math.round(price / bps * 100) / 100 : null;
+      const roe = per && pbr ? Math.round(pbr / per * 100 * 10) / 10 : null;
+
+      stockData[s.code] = { price, high52, low52, w52, eps, bps, yield_, per, pbr, roe, divPerShare };
+      ok++;
+    } catch (e) {
+      console.warn(e);
+      err++;
+    }
+  }
+
+  const now = new Date().toLocaleString("ja-JP");
+  document.getElementById("lastUpdated").textContent = `更新: ${now}`;
+  document.getElementById("s-updated").textContent = now.slice(5, 16);
+  document.getElementById("refreshIcon").textContent = "↻";
+
+  if (err > 0) {
+    setStatus(`取得完了（${ok}件成功 / ${err}件失敗）`, ok > 0 ? "ok" : "err");
+  } else {
+    setStatus(`取得完了 ${ok}件 ✓`, "ok");
+  }
+  render();
+}
+
+function judge(d) {
+  if (!d) return "hold";
+  let ok = 0;
+  if (d.per && d.per <= 20) ok++;
+  if (d.pbr && d.pbr <= 2.5) ok++;
+  if (d.roe && d.roe >= 10) ok++;
+  if (d.w52 !== null && d.w52 <= 60) ok++;
+  if (ok >= 4) return "buy";
+  if (ok >= 3) return "watch";
+  return "hold";
+}
+
+function fmt(v, dec = 0) {
+  if (v === null || v === undefined || isNaN(v)) return "—";
+  return dec === 0 ? v.toLocaleString() : v.toFixed(dec);
+}
+
+function colorVal(v, greenBelow, redAbove) {
+  if (v === null || v === undefined) return "gray";
+  if (v <= greenBelow) return "green";
+  if (v >= redAbove) return "red";
+  return "amber";
+}
+
+function render() {
+  const mf = document.getElementById("monthFilter").value;
+  const sf = document.getElementById("sortBy").value;
+  const bo = document.getElementById("buyOnly").checked;
+  const allowed = mf === "all" ? null : mf.split(",").map(Number);
+
+  let list = WATCHLIST.map(s => ({
+    ...s,
+    d: stockData[s.code] || null,
+    rec: judge(stockData[s.code])
+  }));
+
+  if (allowed) list = list.filter(s => s.months.some(m => allowed.includes(m)));
+  if (bo) list = list.filter(s => s.rec === "buy");
+
+  list.sort((a, b) => {
+    const ad = a.d, bd = b.d;
+    if (sf === "yield") return ((bd?.yield_ || 0) - (ad?.yield_ || 0));
+    if (sf === "per") return ((ad?.per || 999) - (bd?.per || 999));
+    if (sf === "pbr") return ((ad?.pbr || 999) - (bd?.pbr || 999));
+    if (sf === "roe") return ((bd?.roe || 0) - (ad?.roe || 0));
+    if (sf === "w52") return ((ad?.w52 ?? 100) - (bd?.w52 ?? 100));
+    return 0;
+  });
+
+  const buyCnt = list.filter(s => s.rec === "buy").length;
+  const watchCnt = list.filter(s => s.rec === "watch").length;
+  const yields = list.filter(s => s.d?.yield_).map(s => s.d.yield_);
+  const pers = list.filter(s => s.d?.per).map(s => s.d.per);
+  document.getElementById("s-total").textContent = list.length + "銘柄";
+  document.getElementById("s-buy").textContent = buyCnt + "銘柄";
+  document.getElementById("s-yield").textContent = yields.length ? (yields.reduce((a, b) => a + b, 0) / yields.length).toFixed(2) + "%" : "—";
+  document.getElementById("s-per").textContent = pers.length ? (pers.reduce((a, b) => a + b, 0) / pers.length).toFixed(1) + "倍" : "—";
+
+  if (!list.length) {
+    document.getElementById("tbody").innerHTML = '<tr><td colspan="14" class="empty">該当銘柄なし</td></tr>';
+    return;
+  }
+
+  document.getElementById("tbody").innerHTML = list.map(s => {
+    const d = s.d;
+    const rec = s.rec;
+    const recBadge = rec === "buy"
+      ? '<span class="badge badge-buy">買い候補</span>'
+      : rec === "watch"
+      ? '<span class="badge badge-watch">要観察</span>'
+      : '<span class="badge badge-hold">保留</span>';
+    const divBadge = s.div.includes("連続増配")
+      ? `<span class="badge badge-inc">${s.div}</span>`
+      : `<span style="font-size:11px;color:#aaa;">${s.div}</span>`;
+    const monthBadge = `<span class="badge badge-month">${s.months.join("・")}月</span>`;
+
+    if (!d) {
+      return `<tr>
+        <td>${s.name}<br><span style="font-size:10px;color:#aaa;">${s.sector}</span></td>
+        <td>${s.code}</td>
+        <td>${monthBadge}</td>
+        <td colspan="10" style="color:#aaa;text-align:center;">データ未取得</td>
+        <td>${divBadge}</td>
+        <td>${recBadge}</td>
+      </tr>`;
+    }
+
+    const w = d.w52;
+    const barColor = w <= 40 ? "#1d9e75" : w <= 65 ? "#ba7517" : "#e24b4a";
+    const perC = colorVal(d.per, 15, 22);
+    const pbrC = colorVal(d.pbr, 1.5, 2.5);
+    const roeC = d.roe >= 15 ? "green" : d.roe >= 10 ? "amber" : "gray";
+
+    return `<tr class="${rec !== "hold" ? rec : ""}">
+      <td>${s.name}<br><span style="font-size:10px;color:#aaa;">${s.sector}</span></td>
+      <td>${s.code}</td>
+      <td>${monthBadge}</td>
+      <td>${fmt(d.price)}円</td>
+      <td style="font-weight:500;color:#1d9e75;">${fmt(d.yield_, 2)}%</td>
+      <td class="${perC}">${fmt(d.per, 1)}x</td>
+      <td class="${pbrC}">${fmt(d.pbr, 2)}x</td>
+      <td class="${roeC}">${fmt(d.roe, 1)}%</td>
+      <td>${fmt(d.eps)}円</td>
+      <td style="color:#aaa;">${fmt(d.high52)}</td>
+      <td style="color:#aaa;">${fmt(d.low52)}</td>
+      <td>
+        <div class="prog-wrap">
+          <span style="font-size:11px;color:${barColor};min-width:28px;">${w}%</span>
+          <div class="prog-bar"><div class="prog-fill" style="width:${w}%;background:${barColor};"></div></div>
+        </div>
+      </td>
+      <td>${divBadge}</td>
+      <td>${recBadge}</td>
+    </tr>`;
+  }).join("");
+}
+
+if (idToken) {
+  setStatus("トークン読込済み ✓", "ok");
+  document.getElementById("tokenInput").placeholder = "トークン保存済み（再入力で更新）";
+}
+</script>
+</body>
+</html>
